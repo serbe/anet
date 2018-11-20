@@ -1,0 +1,12 @@
+[package]
+name = "anet"
+version = "0.1.0"
+authors = ["Serbe <mkoctuk@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+tokio = "0.1"
+bytes = "0.4"
+futures = "0.1"
+native-tls = "0.2"
+tokio-io = "0.1"
