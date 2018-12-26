@@ -187,52 +187,45 @@ impl SocksStream {
         let greeting = write_all(conn, &[SOCKS_VERSION, 1u8, auth.method as u8]);
         // The server's choice is communicated:
         //      field 1: SOCKS version, 1 byte (0x05 for this version)
-        //      field 2: chosen authentication method, 1 byte, or 0xFF if no acceptable methods were offered
-        let version = greeting.and_then(|(conn, _)| read_exact(conn, [0u8; 2])).and_then(|(conn, buf)| {
-            match (buf[0] == SOCKS_VERSION, buf[1] == auth.method as u8) {
-                (false, _) => Err(Error::new(ErrorKind::Interrupted, "wrong server version")),
-                (_, false) => Err(Error::new(ErrorKind::Interrupted, "auth method not supported",)),
-                _ => Ok((conn, buf))
+        let version = greeting.and_then(|(conn, _)| read_exact(conn, [0u8; 1])).and_then(|(conn, buf)| {
+            match buf[0] {
+                SOCKS_VERSION => Ok((conn, buf)),
+                _ => Err(Error::new(ErrorKind::Interrupted, "wrong server version"))
             }
         });
-        let ask = if buf[1] == AuthMethod::Plain as u8 {
-            // For username/password authentication the client's authentication request is
-            //     field 1: version number, 1 byte (0x01 for current version of username/password authentication)
-            let mut packet = vec![1u8];
-            //     field 2: username length, 1 byte
-            packet.push(auth.username.len() as u8);
-            //     field 3: username, 1–255 bytes
-            packet.append(&mut auth.username.clone());
-            //     field 4: password length, 1 byte
-            packet.push(auth.password.len() as u8);
-            //     field 5: password, 1–255 bytes
-            packet.append(&mut auth.password.clone());
-            // Server response for username/password authentication:
-            //     field 1: version, 1 byte (0x01 for current version of username/password authentication)
-            //     field 2: status code, 1 byte
-            //         0x00: success
-            //         any other value is a failure, connection must be closed
-            write_all(version, &packet).and_then(|(conn, _)| read_exact(conn, [0u8; 2])).and_then(|(conn, buf)| {
-                match (buf[0] != 1u8, buf[1] != 0u8) {
-                    (true, _) => Err(Error::new(ErrorKind::Interrupted, "wrong auth version")),
-                    (_, true) => Err(Error::new(ErrorKind::Interrupted, "failure, connection must be closed")),
-                    _ => Ok((conn, buf))
-                }
-            })
-        } else {
-            version
-        };
-        let mut packet = Vec::new();
+        //      field 2: chosen authentication method, 1 byte, or 0xFF if no acceptable methods were offered
+        let check_auth = version.and_then(|(conn, buf)| read_exact(conn, [0u8; 1])).and_then(|(conn, buf)| {
+            match buf[0] {
+                AuthMethod::Plain => {
+                    // let mut packet = vec![1u8];
+                    //     field 2: username length, 1 byte
+                    //     field 3: username, 1–255 bytes
+                    //     field 4: password length, 1 byte
+                    //     field 5: password, 1–255 bytes
+                    write_all(version, &vec![1u8, auth.username.clone(), auth.password.len() as u8, auth.password.clone()]).and_then(|(conn, _)| read_exact(conn, [0u8; 2])).and_then(|(conn, buf)| {
+                    // Server response for username/password authentication:
+                    //     field 1: version, 1 byte (0x01 for current version of username/password authentication)
+                    //     field 2: status code, 1 byte
+                    //         0x00: success
+                    //         any other value is a failure, connection must be closed
+                        match (buf[0] != 1u8, buf[1] != 0u8) {
+                            (true, _) => Err(Error::new(ErrorKind::Interrupted, "wrong auth version")),
+                            (_, true) => Err(Error::new(ErrorKind::Interrupted, "failure, connection must be closed")),
+                            _ => Ok((conn, buf))
+                        }
+                    })
+                },
+                auth.method as u8 => Ok((conn, buf)),
+                _ => Err(Error::new(ErrorKind::Interrupted, "auth method not supported",))
+            }
+        });
         // The client's connection request is
         //     field 1: SOCKS version number, 1 byte (0x05 for this version)
-        packet.push(SOCKS_VERSION);
         //     field 2: command code, 1 byte:
         //         0x01: establish a TCP/IP stream connection
         //         0x02: establish a TCP/IP port binding
         //         0x03: associate a UDP port
-        packet.push(Command::TcpStreamConnection as u8);
         //     field 3: reserved, must be 0x00, 1 byte
-        packet.push(0u8);
         //     field 4: address type, 1 byte:
         //         0x01: IPv4 address
         //         0x03: Domain name
@@ -242,15 +235,15 @@ impl SocksStream {
         //         1 byte of name length followed by 1–255 bytes the domain name
         //         16 bytes for IPv6 address
         //     field 6: port number in a network byte order, 2 bytes
-        packet.append(&mut target.to_vec()?);
-        socket.write_all(&packet)?;
-        let mut buf = [0u8; 4];
-        socket.read_exact(&mut buf)?;
+        let request = check_auth.and_then(|(conn, _)| write_all(check_auth, vec![SOCKS_VERSION, Command::TcpStreamConnection as u8, 0u8, target.to_vec()?]));
         // Server response:
         //     field 1: SOCKS protocol version, 1 byte (0x05 for this version)
-        if buf[0] != SOCKS_VERSION {
-            return Err(Error::new(ErrorKind::Interrupted, "not supporter server version"));
-        }
+        let version = request.and_then(|(conn, _)| read_exact(conn, [0u8])).and_then(|conn, buf| {
+            match buf[0] {
+                SOCKS_VERSION => Ok((conn, buf)),
+                _ => Err(Error::new(ErrorKind::Interrupted, "not supporter server version"))
+            }
+        });
         //     field 2: status, 1 byte:
         //         0x00: request granted
         //         0x01: general failure
@@ -261,34 +254,39 @@ impl SocksStream {
         //         0x06: TTL expired
         //         0x07: command not supported / protocol error
         //         0x08: address type not supported
-        match buf[1] {
-            0 => Ok(()),
-            1 => Err(Error::new(ErrorKind::Interrupted, "general failure")),
-            2 => Err(Error::new(
-                ErrorKind::Interrupted,
-                "connection not allowed by ruleset",
-            )),
-            3 => Err(Error::new(ErrorKind::Interrupted, "network unreachable")),
-            4 => Err(Error::new(ErrorKind::Interrupted, "host unreachable")),
-            5 => Err(Error::new(
-                ErrorKind::Interrupted,
-                "connection refused by destination host",
-            )),
-            6 => Err(Error::new(ErrorKind::Interrupted, "TTL expired")),
-            7 => Err(Error::new(
-                ErrorKind::Interrupted,
-                "command not supported / protocol error",
-            )),
-            8 => Err(Error::new(
-                ErrorKind::Interrupted,
-                "address type not supported",
-            )),
-            _ => Err(Error::new(ErrorKind::Other, "unknown error")),
-        }?;
+        let status = version.and_then(|(conn, _)| read_exact(conn, [0u8])).and_then(|conn, buf| {
+            match buf[0] {
+                0 => Ok((conn, buf)),
+                1 => Err(Error::new(ErrorKind::Interrupted, "general failure")),
+                2 => Err(Error::new(
+                    ErrorKind::Interrupted,
+                    "connection not allowed by ruleset",
+                )),
+                3 => Err(Error::new(ErrorKind::Interrupted, "network unreachable")),
+                4 => Err(Error::new(ErrorKind::Interrupted, "host unreachable")),
+                5 => Err(Error::new(
+                    ErrorKind::Interrupted,
+                    "connection refused by destination host",
+                )),
+                6 => Err(Error::new(ErrorKind::Interrupted, "TTL expired")),
+                7 => Err(Error::new(
+                    ErrorKind::Interrupted,
+                    "command not supported / protocol error",
+                )),
+                8 => Err(Error::new(
+                    ErrorKind::Interrupted,
+                    "address type not supported",
+                )),
+                _ => Err(Error::new(ErrorKind::Other, "unknown error")),
+            }
+        });
         //     field 3: reserved, must be 0x00, 1 byte
-        if buf[2] != 0u8 {
-            return Err(Error::new(ErrorKind::Interrupted, "invalid reserved byte"));
-        }
+        let reverved = status.and_then(|(conn, _)| read_exact(conn, [0u8])).and_then(|conn, buf| {
+            match buf[0] {
+                0u8 => Ok((conn, buf)),
+                _ => Err(Error::new(ErrorKind::Interrupted, "invalid reserved byte"))
+            }
+        });
         //     field 4: address type, 1 byte:
         //         0x01: IPv4 address
         //         0x03: Domain name
@@ -297,7 +295,7 @@ impl SocksStream {
         //         4 bytes for IPv4 address
         //         1 byte of name length followed by 1–255 bytes the domain name
         //         16 bytes for IPv6 address
-        let bind_addr = match buf[3] {
+        let (bind_addr = match buf[3] {
             1 => {
                 let mut buf = [0u8; 4];
                 socket.read_exact(&mut buf)?;
