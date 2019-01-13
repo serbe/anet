@@ -66,7 +66,7 @@ impl Addr {
         }
     }
 
-    fn to_vec(&self) -> io::Result<Vec<u8>> {
+    pub fn to_vec(&self) -> io::Result<Vec<u8>> {
         let mut vec = Vec::new();
         vec.push(self.addr_type()?);
         match self.url.host() {

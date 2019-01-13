@@ -1,6 +1,6 @@
 [package]
 name = "anet"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Serbe <mkoctuk@gmail.com>"]
 edition = "2018"
 
@@ -9,6 +9,7 @@ url = "1.7"
 futures = "0.1"
 native-tls = "0.2"
 tokio = "0.1"
+tokio-timer = "0.2"
 
 # [dependencies.tokio]
 # version = "0.1"
