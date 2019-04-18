@@ -1,5 +1,5 @@
 use std::io::{self, Error, ErrorKind};
-use std::net::{Ipv4Addr, Ipv6Addr, ToSocketAddrs};
+// use std::net::{Ipv4Addr, Ipv6Addr, ToSocketAddrs};
 use std::str::FromStr;
 use url::{Host, Url};
 
