@@ -1,97 +1,120 @@
 
-use std::net::{SocketAddr, ToSocketAddrs};
+// use std::net::{SocketAddr, ToSocketAddrs};
+
 
 #[derive(Debug, Default)]
 pub struct Url<'a> {
-    shcheme: Option<&'a str>,
+    scheme: Option<&'a str>,
     user: Option<&'a str>,
     password: Option<&'a str>,
     host: &'a str,
     port: Option<&'a str>,
-    // path: &'a str,
+    path: Option<&'a str>,
+    query: Option<&'a str>,
+    fragment: Option<&'a str>,
 }
 
 impl<'a> Url<'a> {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Default::default()
     }
-}
 
-fn get_path(addr: &str) -> Result<(&str, &str), &str> {
-    if let Some(pos) = addr.find('/') {
-        let left = addr.get(..pos).ok_or_else(|| "error ger left")?;
-        let right = addr.get(pos+1..).ok_or_else(|| "error ger left")?;
-        Ok((left, right))
-    } else {
-        Ok((addr, ""))
-    }
-} 
-
-fn get_scheme(input: &str) -> Option<&str> {
-    let v: Vec<&str> = input.splitn(2, "://").collect();
-    if v.len() == 2 {
-        Some(v[0])
-    } else {
-        None
-    }
-}
-
-fn get_userinfo(input: &str) -> (Option<&str>, Option<&str>) {
-    if let Some(pos) = input.find('@') {
-        match input.get(..pos) {
-            Some(user) => {
-                if let Some(pos) = user.find(':') {
-                    (user.get(..pos), user.get(pos+1..))
-                } else {
-                    (Some(user), None)
-                }
-            },
-            None => (None, None)
-        }
-    } else {
-        (None, None)
-    }
-}
-
-fn get_port(input: &str) -> Option<&str> {
-    if let Some(pos) = input.find(':') {
-        let host = input.get(..pos)?;
-        let other = input.get(pos+1..)?;
-        if let Some(pos) = input.find('/') {
-            other.get(..pos)
+    pub fn hostname(self) -> String {
+        if let Some(port) = self.port {
+            format!("{}:{}", self.host, port)
         } else {
-            Some(other)
+            self.host.to_string()
         }
-    } else {
-        None
+    }
+
+    pub fn from(s: &str) -> Result<Url, &str> {
+        let raw = s;
+
+
+        let (raw, fragment) = if let Some(pos) = raw.find('#') {
+            (
+                raw.get(..pos).ok_or_else(|| "bad fragment")?,
+                raw.get(pos + 1..),
+            )
+        } else {
+            (raw, None)
+        };
+
+        let (raw, query) = if let Some(pos) = raw.find('?') {
+            (
+                raw.get(..pos).ok_or_else(|| "bad query")?,
+                raw.get(pos + 1..),
+            )
+        } else {
+            (raw, None)
+        };
+
+        let (raw, scheme) = if let Some(pos) = raw.find("://") {
+            (
+                raw.get(pos + 3..).ok_or_else(|| "bad scheme")?,
+                raw.get(..pos),
+            )
+        } else {
+            (raw, None)
+        };
+
+        let (raw, user, password) = if let Some(pos) = raw.find('@') {
+            let new_raw = raw.get(pos + 1..).ok_or_else(|| "bad user info")?;
+            let userinfo = raw.get(..pos);
+            match userinfo {
+                Some(user) => {
+                    if let Some(pos) = user.find(':') {
+                        (new_raw, user.get(..pos), user.get(pos + 1..))
+                    } else {
+                        (new_raw, Some(user), None)
+                    }
+                }
+                None => (new_raw, None, None),
+            }
+        } else {
+            (raw, None, None)
+        };
+
+        let (raw, path) = if let Some(pos) = raw.find('/') {
+            (raw.get(..pos).ok_or_else(|| "bad path")?, raw.get(pos..))
+        } else {
+            (raw, None)
+        };
+
+        let (host, port) = if let Some(pos) = raw.find(':') {
+            if let Some(start) = raw.find('[') {
+                if let Some(end) = raw.find(']') {
+                    if start < end && pos == end + 1 {
+                        (
+                            raw.get(..pos).ok_or_else(|| "bad host")?,
+                            raw.get(..pos + 1),
+                        )
+                    } else {
+                        Err("bad ipv6 address")?
+                    }
+                } else {
+                    Err("bad ipv6 address")?
+                }
+            } else {
+                (
+                    raw.get(..pos).ok_or_else(|| "bad host")?,
+                    raw.get(..pos + 1),
+                )
+            }
+        } else {
+            (raw, None)
+        };
+
+        Ok(Url {
+            scheme,
+            user,
+            password,
+            host,
+            port,
+            path,
+            query,
+            fragment,
+        })
     }
 }
 
-fn lookup(input: &str) -> Result<Url, &str> {
-    let mut input = input;
-    let mut host;
-    let scheme = get_scheme(input);
-    if let Some(scheme) = scheme {
-        input = input.get(scheme.len()+3..).ok_or_else(|| "bad address")?;
-    }
-    let (user, password) = get_userinfo(input);
-    if user.is_some() {
-        if let Some(pos) = input.find('@') {
-            input = input.get(pos+1..).ok_or_else(|| "bad address")?;
-        }
-    }
-    let port = get_port(input);
-    if port.is_some() {
-        if let Some(pos) = input.find(':') {
-            host = input.get(..pos).ok_or_else(|| "bad address")?;
-            input = input.get(port.ok_or_else(|| "bad address")?.len()+pos+1..).ok_or_else(|| "bad address")?;
-        }
-    } else {
-
-    }
-    Ok(Url{
-        scheme,
-        hostname: hostname.to_string(),
-        path: path.to_string()
-    })
-}
