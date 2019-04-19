@@ -2,7 +2,7 @@
 // use std::net::{SocketAddr, ToSocketAddrs};
 
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct Url<'a> {
     scheme: Option<&'a str>,
     user: Option<&'a str>,
@@ -87,7 +87,7 @@ impl<'a> Url<'a> {
                     if start < end && pos == end + 1 {
                         (
                             raw.get(..pos).ok_or_else(|| "bad host")?,
-                            raw.get(..pos + 1),
+                            raw.get(pos + 1..),
                         )
                     } else {
                         Err("bad ipv6 address")?
@@ -98,12 +98,16 @@ impl<'a> Url<'a> {
             } else {
                 (
                     raw.get(..pos).ok_or_else(|| "bad host")?,
-                    raw.get(..pos + 1),
+                    raw.get(pos + 1..),
                 )
             }
         } else {
             (raw, None)
         };
+
+        if let Some(port) = port {
+            let _ = port.parse::<u32>().map_err(|_| "bad port")?;
+        }
 
         Ok(Url {
             scheme,
@@ -118,3 +122,25 @@ impl<'a> Url<'a> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test1() {
+        let url = Url::from("http://www.google.com/?q=go+language#foo").unwrap();
+        assert_eq!(
+            Url {
+                scheme: Some("http"),
+                user: None,
+                password: None,
+                host: "www.google.com",
+                port: None,
+                path: Some("/"),
+                query: Some("q=go+language"),
+                fragment: Some("foo"),
+            },
+            url
+        );
+    }
+}
