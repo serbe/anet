@@ -1,29 +1,29 @@
-use std::{error, fmt};
-//  use std::net::{SocketAddr, ToSocketAddrs};
 
+use std::net::{SocketAddr, ToSocketAddrs};
+use std::{error, fmt};
 #[derive(Debug)]
 pub enum UrlError<'a> {
+    ParseFragment(&'a str),
+    ParseHost(&'a str),
+    ParseIPv6(&'a str),
+    ParsePath(&'a str),
+    ParsePort(&'a str),
+    ParseQuery(&'a str),
     ParseScheme(&'a str),
     ParseUserInfo(&'a str),
-    ParseHost(&'a str),
-    ParsePort(&'a str),
-    ParsePath(&'a str),
-    ParseQuery(&'a str),
-    ParseFragment(&'a str),
-    ParseIPv6(&'a str),
 }
 
 impl<'a> fmt::Display for UrlError<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            UrlError::ParseFragment(ref e) => write!(f, "not parse fragment in {}", e),
+            UrlError::ParseHost(ref e) => write!(f, "not parse host in {}", e),
+            UrlError::ParseIPv6(ref e) => write!(f, "not parse IPv6 in {}", e),
+            UrlError::ParsePath(ref e) => write!(f, "not parse path in {}", e),
+            UrlError::ParsePort(ref e) => write!(f, "not parse port in {}", e),
+            UrlError::ParseQuery(ref e) => write!(f, "not parse query in {}", e),
             UrlError::ParseScheme(ref e) => write!(f, "not parse scheme in {}", e),
             UrlError::ParseUserInfo(ref e) => write!(f, "not parse UserInfo in {}", e),
-            UrlError::ParseHost(ref e) => write!(f, "not parse host in {}", e),
-            UrlError::ParsePort(ref e) => write!(f, "not parse port in {}", e),
-            UrlError::ParsePath(ref e) => write!(f, "not parse path in {}", e),
-            UrlError::ParseQuery(ref e) => write!(f, "not parse query in {}", e),
-            UrlError::ParseFragment(ref e) => write!(f, "not parse fragment in {}", e),
-            UrlError::ParseIPv6(ref e) => write!(f, "not parse IPv6 in {}", e),
         }
     }
 }
@@ -31,14 +31,14 @@ impl<'a> fmt::Display for UrlError<'a> {
 impl<'a> error::Error for UrlError<'a> {
     fn description(&self) -> &str {
         match *self {
+            UrlError::ParseFragment(ref e) => e,
+            UrlError::ParseHost(ref e) => e,
+            UrlError::ParseIPv6(ref e) => e,
+            UrlError::ParsePath(ref e) => e,
+            UrlError::ParsePort(ref e) => e,
+            UrlError::ParseQuery(ref e) => e,
             UrlError::ParseScheme(ref e) => e,
             UrlError::ParseUserInfo(ref e) => e,
-            UrlError::ParseHost(ref e) => e,
-            UrlError::ParsePort(ref e) => e,
-            UrlError::ParsePath(ref e) => e,
-            UrlError::ParseQuery(ref e) => e,
-            UrlError::ParseFragment(ref e) => e,
-            UrlError::ParseIPv6(ref e) => e,
         }
     }
 }
@@ -60,7 +60,7 @@ impl<'a> Url<'a> {
         Default::default()
     }
 
-    pub fn hostname(self) -> String {
+    pub fn hostname(&self) -> String {
         if let Some(port) = self.port {
             format!("{}:{}", self.host, port)
         } else {
@@ -68,19 +68,27 @@ impl<'a> Url<'a> {
         }
     }
 
-    pub fn hostport(self) -> String {
-        format!("{}:{}", self.host.clone(), self.port())
+    pub fn hostport(&self) -> String {
+        format!("{}:{}", self.host, self.port())
     }
 
-    pub fn port(self) -> String {
+    pub fn path(&self) -> String {
+        if let Some(path) = self.path {
+            path.to_string()
+        } else {
+            String::new()
+        }
+    }
+
+    pub fn port(&self) -> String {
         if let Some(port) = self.port {
             port.to_string()
         } else {
             match self.scheme {
-                Some("http") => "80",
-                Some("https") => "443",
                 Some("ftp") => "21",
                 Some("git") => "9418",
+                Some("http") => "80",
+                Some("https") => "443",
                 Some("imap") => "143",
                 Some("irc") => "194",
                 Some("ldap") => "389",
@@ -97,9 +105,14 @@ impl<'a> Url<'a> {
                 Some("vnc") => "5900",
                 Some("ws") => "80",
                 Some("wss") => "443",
-                _ => "80"
-            }.to_string()
+                _ => "80",
+            }
+            .to_string()
         }
+    }
+
+    pub fn socket_addr(&self) -> Option<SocketAddr> {
+        self.hostport().to_socket_addrs().ok()?.next()
     }
 
     pub fn from(s: &str) -> Result<Url, UrlError> {
