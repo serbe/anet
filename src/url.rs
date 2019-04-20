@@ -68,38 +68,36 @@ impl<'a> Url<'a> {
         }
     }
 
-    // pub fn hostport(self) -> String {
-
-    // }
+    pub fn hostport(self) -> String {
+        format!("{}:{}", self.host.clone(), self.port())
+    }
 
     pub fn port(self) -> String {
         if let Some(port) = self.port {
             port.to_string()
         } else {
             match self.scheme {
-                Some(scheme) => match scheme {
-                "http" => "80",
-                "https" => "443",
-                "ftp" => "21",
-                "git" => "9418",
-                "imap" => "143",
-                "irc" => "194",
-                "ldap" => "389",
-                "ldaps" => "636",
-                "nfs" => "111",
-                "pop" => "110",
-                "redis" => "6379",
-                "rsync" => "873",
-                "sftp" => "22",
-                "smb" => "445",
-                "snmp" => "161",
-                "ssh" => "22",
-                "telnet" => "23",
-                "vnc" => "5900",
-                "ws" => "80",
-                "wss" => "443",
-                },
-                None => "80"
+                Some("http") => "80",
+                Some("https") => "443",
+                Some("ftp") => "21",
+                Some("git") => "9418",
+                Some("imap") => "143",
+                Some("irc") => "194",
+                Some("ldap") => "389",
+                Some("ldaps") => "636",
+                Some("nfs") => "111",
+                Some("pop") => "110",
+                Some("redis") => "6379",
+                Some("rsync") => "873",
+                Some("sftp") => "22",
+                Some("smb") => "445",
+                Some("snmp") => "161",
+                Some("ssh") => "22",
+                Some("telnet") => "23",
+                Some("vnc") => "5900",
+                Some("ws") => "80",
+                Some("wss") => "443",
+                _ => "80"
             }.to_string()
         }
     }
