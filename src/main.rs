@@ -17,9 +17,7 @@ pub mod url;
 use url::Url;
 
 fn main() -> Result<(), Box<std::error::Error>> {
-    println!("{:?}", Url::from("ident.me:90/.json")?.hostname());
-    println!("{:?}", Url::from("ident.me:80/.json")?.hostname());
-    println!("{:?}", Url::from("ident.me:/.json")?.hostname());
+    println!("{:?}", Url::from("ident.me/.json")?.hostname());
     // let mut runtime = Runtime::new()?;
     // let addr = "ident.me/.json"
     //     .to_socket_addrs()?

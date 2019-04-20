@@ -1,23 +1,23 @@
-use crate::url::Url;
+// use crate::url::Url;
 
-#[test]
-fn no_path() {
-	let s = Url::from("http://www.example.org").unwrap();
-	let mut u = Url::new();
-	u.scheme = Some("http");
-	u.host = "www.example.org";
-	assert_eq!(s, u);
-}
+// #[test]
+// fn no_path() {
+// 	let s = Url::from("http://www.example.org").unwrap();
+// 	let mut u = Url::new();
+// 	u.scheme = Some("http");
+// 	u.host = "www.example.org";
+// 	assert_eq!(s, u);
+// }
 
-#[test]
-fn with_path() {
-	let s = Url::from("http://www.example.org/").unwrap();
-	let mut u = Url::new();
-	u.scheme = Some("http");
-	u.host = "www.example.org";
-	u.path = Some("/");
-	assert_eq!(s, u);
-}
+// #[test]
+// fn with_path() {
+// 	let s = Url::from("http://www.example.org/").unwrap();
+// 	let mut u = Url::new();
+// 	u.scheme = Some("http");
+// 	u.host = "www.example.org";
+// 	u.path = Some("/");
+// 	assert_eq!(s, u);
+// }
 
 // // path with hex escaping
 // { let mut u = Url::new();

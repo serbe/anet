@@ -1,6 +1,47 @@
-
+use std::{error, fmt};
 //  use std::net::{SocketAddr, ToSocketAddrs};
 
+#[derive(Debug)]
+pub enum UrlError<'a> {
+    ParseScheme(&'a str),
+    ParseUserInfo(&'a str),
+    ParseHost(&'a str),
+    ParsePort(&'a str),
+    ParsePath(&'a str),
+    ParseQuery(&'a str),
+    ParseFragment(&'a str),
+    ParseIPv6(&'a str),
+}
+
+impl<'a> fmt::Display for UrlError<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            UrlError::ParseScheme(ref e) => write!(f, "not parse scheme in {}", e),
+            UrlError::ParseUserInfo(ref e) => write!(f, "not parse UserInfo in {}", e),
+            UrlError::ParseHost(ref e) => write!(f, "not parse host in {}", e),
+            UrlError::ParsePort(ref e) => write!(f, "not parse port in {}", e),
+            UrlError::ParsePath(ref e) => write!(f, "not parse path in {}", e),
+            UrlError::ParseQuery(ref e) => write!(f, "not parse query in {}", e),
+            UrlError::ParseFragment(ref e) => write!(f, "not parse fragment in {}", e),
+            UrlError::ParseIPv6(ref e) => write!(f, "not parse IPv6 in {}", e),
+        }
+    }
+}
+
+impl<'a> error::Error for UrlError<'a> {
+    fn description(&self) -> &str {
+        match *self {
+            UrlError::ParseScheme(ref e) => e,
+            UrlError::ParseUserInfo(ref e) => e,
+            UrlError::ParseHost(ref e) => e,
+            UrlError::ParsePort(ref e) => e,
+            UrlError::ParsePath(ref e) => e,
+            UrlError::ParseQuery(ref e) => e,
+            UrlError::ParseFragment(ref e) => e,
+            UrlError::ParseIPv6(ref e) => e,
+        }
+    }
+}
 
 #[derive(Debug, Default, PartialEq)]
 pub struct Url<'a> {
@@ -27,13 +68,48 @@ impl<'a> Url<'a> {
         }
     }
 
-    pub fn from(s: &str) -> Result<Url, &str> {
-        let raw = s;
+    // pub fn hostport(self) -> String {
 
+    // }
+
+    pub fn port(self) -> String {
+        if let Some(port) = self.port {
+            port.to_string()
+        } else {
+            match self.scheme {
+                Some(scheme) => match scheme {
+                "http" => "80",
+                "https" => "443",
+                "ftp" => "21",
+                "git" => "9418",
+                "imap" => "143",
+                "irc" => "194",
+                "ldap" => "389",
+                "ldaps" => "636",
+                "nfs" => "111",
+                "pop" => "110",
+                "redis" => "6379",
+                "rsync" => "873",
+                "sftp" => "22",
+                "smb" => "445",
+                "snmp" => "161",
+                "ssh" => "22",
+                "telnet" => "23",
+                "vnc" => "5900",
+                "ws" => "80",
+                "wss" => "443",
+                },
+                None => "80"
+            }.to_string()
+        }
+    }
+
+    pub fn from(s: &str) -> Result<Url, UrlError> {
+        let raw = s;
 
         let (raw, fragment) = if let Some(pos) = raw.find('#') {
             (
-                raw.get(..pos).ok_or_else(|| "bad fragment")?,
+                raw.get(..pos).ok_or_else(|| UrlError::ParseFragment(raw))?,
                 raw.get(pos + 1..),
             )
         } else {
@@ -42,7 +118,7 @@ impl<'a> Url<'a> {
 
         let (raw, query) = if let Some(pos) = raw.find('?') {
             (
-                raw.get(..pos).ok_or_else(|| "bad query")?,
+                raw.get(..pos).ok_or_else(|| UrlError::ParseQuery(raw))?,
                 raw.get(pos + 1..),
             )
         } else {
@@ -51,7 +127,8 @@ impl<'a> Url<'a> {
 
         let (raw, scheme) = if let Some(pos) = raw.find("://") {
             (
-                raw.get(pos + 3..).ok_or_else(|| "bad scheme")?,
+                raw.get(pos + 3..)
+                    .ok_or_else(|| UrlError::ParseScheme(raw))?,
                 raw.get(..pos),
             )
         } else {
@@ -59,7 +136,9 @@ impl<'a> Url<'a> {
         };
 
         let (raw, user, password) = if let Some(pos) = raw.find('@') {
-            let new_raw = raw.get(pos + 1..).ok_or_else(|| "bad user info")?;
+            let new_raw = raw
+                .get(pos + 1..)
+                .ok_or_else(|| UrlError::ParseUserInfo(raw))?;
             let userinfo = raw.get(..pos);
             match userinfo {
                 Some(user) => {
@@ -76,7 +155,10 @@ impl<'a> Url<'a> {
         };
 
         let (raw, path) = if let Some(pos) = raw.find('/') {
-            (raw.get(..pos).ok_or_else(|| "bad path")?, raw.get(pos..))
+            (
+                raw.get(..pos).ok_or_else(|| UrlError::ParsePath(raw))?,
+                raw.get(pos..),
+            )
         } else {
             (raw, None)
         };
@@ -86,20 +168,20 @@ impl<'a> Url<'a> {
                 if let Some(end) = raw.find(']') {
                     if start == 0 && pos == end + 1 {
                         (
-                            raw.get(..pos).ok_or_else(|| "bad host")?,
+                            raw.get(..pos).ok_or_else(|| UrlError::ParseHost(raw))?,
                             raw.get(pos + 1..),
                         )
                     } else if start == 0 && end == raw.len() - 1 {
                         (raw, None)
                     } else {
-                        Err("bad ipv6 address")?
+                        Err(UrlError::ParseIPv6(raw))?
                     }
                 } else {
-                    Err("bad ipv6 address")?
+                    Err(UrlError::ParseIPv6(raw))?
                 }
             } else {
                 (
-                    raw.get(..pos).ok_or_else(|| "bad host")?,
+                    raw.get(..pos).ok_or_else(|| UrlError::ParseHost(raw))?,
                     raw.get(pos + 1..),
                 )
             }
@@ -108,7 +190,7 @@ impl<'a> Url<'a> {
         };
 
         if let Some(port) = port {
-            let _ = port.parse::<u32>().map_err(|_| "bad port")?;
+            let _ = port.parse::<u32>().map_err(|_| UrlError::ParsePort(raw))?;
         }
 
         Ok(Url {
