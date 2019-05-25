@@ -1,5 +1,5 @@
 use std::io;
-use std::io::{Error, ErrorKind};
+// use std::io::{Error, ErrorKind};
 
 use futures::{try_ready, Async, Future, Poll};
 use tokio_io::{

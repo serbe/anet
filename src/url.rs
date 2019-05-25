@@ -1,46 +1,5 @@
+use crate::errors::Error;
 use std::net::{SocketAddr, ToSocketAddrs};
-use std::{error, fmt};
-#[derive(Debug)]
-pub enum UrlError<'a> {
-    ParseFragment(&'a str),
-    ParseHost(&'a str),
-    ParseIPv6(&'a str),
-    ParsePath(&'a str),
-    ParsePort(&'a str),
-    ParseQuery(&'a str),
-    ParseScheme(&'a str),
-    ParseUserInfo(&'a str),
-}
-
-impl<'a> fmt::Display for UrlError<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            UrlError::ParseFragment(ref e) => write!(f, "not parse fragment in {}", e),
-            UrlError::ParseHost(ref e) => write!(f, "not parse host in {}", e),
-            UrlError::ParseIPv6(ref e) => write!(f, "not parse IPv6 in {}", e),
-            UrlError::ParsePath(ref e) => write!(f, "not parse path in {}", e),
-            UrlError::ParsePort(ref e) => write!(f, "not parse port in {}", e),
-            UrlError::ParseQuery(ref e) => write!(f, "not parse query in {}", e),
-            UrlError::ParseScheme(ref e) => write!(f, "not parse scheme in {}", e),
-            UrlError::ParseUserInfo(ref e) => write!(f, "not parse UserInfo in {}", e),
-        }
-    }
-}
-
-impl<'a> error::Error for UrlError<'a> {
-    fn description(&self) -> &str {
-        match *self {
-            UrlError::ParseFragment(ref e) => e,
-            UrlError::ParseHost(ref e) => e,
-            UrlError::ParseIPv6(ref e) => e,
-            UrlError::ParsePath(ref e) => e,
-            UrlError::ParsePort(ref e) => e,
-            UrlError::ParseQuery(ref e) => e,
-            UrlError::ParseScheme(ref e) => e,
-            UrlError::ParseUserInfo(ref e) => e,
-        }
-    }
-}
 
 #[derive(Debug, Default, PartialEq)]
 pub struct Url<'a> {
@@ -114,12 +73,12 @@ impl<'a> Url<'a> {
         self.hostport().to_socket_addrs().ok()?.next()
     }
 
-    pub fn from(s: &str) -> Result<Url, UrlError> {
+    pub fn from(s: &'static str) -> Result<Url, Error> {
         let raw = s;
 
         let (raw, fragment) = if let Some(pos) = raw.find('#') {
             (
-                raw.get(..pos).ok_or_else(|| UrlError::ParseFragment(raw))?,
+                raw.get(..pos).ok_or_else(|| Error::ParseFragment(raw))?,
                 raw.get(pos + 1..),
             )
         } else {
@@ -128,7 +87,7 @@ impl<'a> Url<'a> {
 
         let (raw, query) = if let Some(pos) = raw.find('?') {
             (
-                raw.get(..pos).ok_or_else(|| UrlError::ParseQuery(raw))?,
+                raw.get(..pos).ok_or_else(|| Error::ParseQuery(raw))?,
                 raw.get(pos + 1..),
             )
         } else {
@@ -137,8 +96,7 @@ impl<'a> Url<'a> {
 
         let (raw, scheme) = if let Some(pos) = raw.find("://") {
             (
-                raw.get(pos + 3..)
-                    .ok_or_else(|| UrlError::ParseScheme(raw))?,
+                raw.get(pos + 3..).ok_or_else(|| Error::ParseScheme(raw))?,
                 raw.get(..pos),
             )
         } else {
@@ -148,7 +106,7 @@ impl<'a> Url<'a> {
         let (raw, user, password) = if let Some(pos) = raw.find('@') {
             let new_raw = raw
                 .get(pos + 1..)
-                .ok_or_else(|| UrlError::ParseUserInfo(raw))?;
+                .ok_or_else(|| Error::ParseUserInfo(raw))?;
             let userinfo = raw.get(..pos);
             match userinfo {
                 Some(user) => {
@@ -166,7 +124,7 @@ impl<'a> Url<'a> {
 
         let (raw, path) = if let Some(pos) = raw.find('/') {
             (
-                raw.get(..pos).ok_or_else(|| UrlError::ParsePath(raw))?,
+                raw.get(..pos).ok_or_else(|| Error::ParsePath(raw))?,
                 raw.get(pos..),
             )
         } else {
@@ -178,20 +136,20 @@ impl<'a> Url<'a> {
                 if let Some(end) = raw.find(']') {
                     if start == 0 && pos == end + 1 {
                         (
-                            raw.get(..pos).ok_or_else(|| UrlError::ParseHost(raw))?,
+                            raw.get(..pos).ok_or_else(|| Error::ParseHost(raw))?,
                             raw.get(pos + 1..),
                         )
                     } else if start == 0 && end == raw.len() - 1 {
                         (raw, None)
                     } else {
-                        Err(UrlError::ParseIPv6(raw))?
+                        Err(Error::ParseIPv6(raw))?
                     }
                 } else {
-                    Err(UrlError::ParseIPv6(raw))?
+                    Err(Error::ParseIPv6(raw))?
                 }
             } else {
                 (
-                    raw.get(..pos).ok_or_else(|| UrlError::ParseHost(raw))?,
+                    raw.get(..pos).ok_or_else(|| Error::ParseHost(raw))?,
                     raw.get(pos + 1..),
                 )
             }
@@ -200,7 +158,7 @@ impl<'a> Url<'a> {
         };
 
         if let Some(port) = port {
-            let _ = port.parse::<u32>().map_err(|_| UrlError::ParsePort(raw))?;
+            let _ = port.parse::<u32>().map_err(|_| Error::ParsePort(raw))?;
         }
 
         Ok(Url {
