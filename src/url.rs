@@ -1,4 +1,3 @@
-
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::{error, fmt};
 #[derive(Debug)]
@@ -395,7 +394,6 @@ mod tests {
         u.path = Some("/threeslashes");
         assert_eq!(s, u);
     }
-
 
     // #[test]
     // fn relative_path() {
