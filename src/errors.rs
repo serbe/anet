@@ -54,7 +54,7 @@ impl From<String> for Error {
     fn from(err: String) -> Error {
         Error::Io(std::io::Error::new(
             std::io::ErrorKind::Other,
-            format!("{}", err),
+            err,
         ))
     }
 }
@@ -63,7 +63,7 @@ impl From<&str> for Error {
     fn from(err: &str) -> Error {
         Error::Io(std::io::Error::new(
             std::io::ErrorKind::Other,
-            format!("{}", err),
+            err,
         ))
     }
 }
@@ -72,7 +72,7 @@ impl From<Error> for std::io::Error {
     fn from(err: Error) -> std::io::Error {
         std::io::Error::new(
             std::io::ErrorKind::Other,
-            format!("{}", err),
+            err.to_string(),
         )
     }
 }

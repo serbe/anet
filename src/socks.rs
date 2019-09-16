@@ -68,7 +68,7 @@ enum AddressType {
 }
 
 impl AddressType {
-    fn as_u8(self) -> u8 {
+    fn as_u8(&self) -> u8 {
         match self {
             AddressType::IPv4 => 1u8,
             AddressType::DomainName => 3u8,
@@ -726,7 +726,7 @@ impl HandshakeResponse {
         buf.put_slice(&[consts::SOCKS5_VERSION, self.chosen_method]);
     }
 
-    pub fn serialized_len(&self) -> usize {
+    pub fn serialized_len(self) -> usize {
         2
     }
 }

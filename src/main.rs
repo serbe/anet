@@ -1,4 +1,4 @@
-use crate::url::Url;
+use url::Url;
 use futures::Future;
 use socks::Address;
 use tokio::runtime::Runtime;
@@ -8,20 +8,26 @@ mod client;
 mod socks;
 // mod addr;
 mod errors;
-mod url;
+// mod url;
 mod utils;
 
 fn main() {
     let mut runtime = Runtime::new().unwrap();
-    let url = Url::from("ident.me/.json").unwrap();
-    let proxy = Url::from("127.0.0.1:9050").unwrap().socket_addr().unwrap();
+//    let url = Url::from("ident.me/.json").unwrap();
+    let url = Url::parse("https://httpbin.org/ip").unwrap();
+    dbg!(&url);
+    let proxy = Url::parse("http://127.0.0.1:9050").unwrap();
+    dbg!(&proxy);
+    let proxy_sa = proxy.socket_addrs(|| Some(9050)).unwrap();
+    dbg!(&proxy_sa);
+
     let client =
-        client::Socks5Client::connect(Address::DomainNameAddress("ident.me".to_owned(), 80), proxy);
+        client::Socks5Client::connect(Address::DomainNameAddress("ident.me".to_owned(), 80), *proxy_sa.first().unwrap());
 
     let get = format!(
         "GET {} HTTP/1.0\r\nHost: {}\r\n\r\n",
         url.path(),
-        url.hostname()
+        url.host_str().unwrap()
     )
     .into_bytes();
 
