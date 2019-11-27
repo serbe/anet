@@ -5,17 +5,13 @@ authors = ["Serbe <mkoctuk@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-bytes = "0.4"
+bytes = "0.5"
 byteorder = "1.3"
 url = "2.1"
-failure = "0.1"
-futures = "0.1"
-native-tls = "0.2"
-tokio = "0.1"
-tokio-io = "0.1"
-tokio-tcp = "0.1"
-tokio-timer = "0.2"
-
-# [dependencies.tokio]
-# version = "0.1"
-# features = ["async-await-preview"]
+futures = "0.3"
+tokio-tls = "0.3"
+tokio = { version = "0.2", features = ["full"] }
+# tokio-io = "0.2.0-alpha.6"
+# tokio-tcp = "0.2.0-alpha.6"
+# tokio-timer = "0.2"
+anyhow = "1.0"

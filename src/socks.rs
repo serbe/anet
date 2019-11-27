@@ -1,6 +1,7 @@
 // use crate::addr::Addr;
 //use crate::utils::{err_from, f_box};
-use crate::errors::Error;
+// use crate::errors::Error;
+use anyhow::{Context, Result};
 
 use std::{
     convert::From,
@@ -11,12 +12,12 @@ use std::{
 };
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use bytes::{BufMut, Bytes, BytesMut, IntoBuf};
-use futures::{try_ready, Async, Future, Poll};
+use bytes::{BufMut, Bytes, BytesMut};
+use futures::{Future};
 //use log::error;
-use tokio_io::{io::read_exact, try_nb, AsyncRead, AsyncWrite};
+// use tokio::{io::read_exact, try_nb, AsyncRead, AsyncWrite};
 
-use super::utils::{write_bytes, WriteBytes};
+// use super::utils::{write_bytes, WriteBytes};
 
 mod consts {
     pub const SOCKS5_VERSION: u8 = 0x05;
