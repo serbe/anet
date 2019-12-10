@@ -1,12 +1,13 @@
-use anyhow::Result;
+// use anyhow::Result;
 
 use crate::addr::Addr;
 // use crate::utils::{err_from, f_box};
 
-use tokio_tls::{TlsConnector, TlsStream};
+// use async_tls::TlsConnector;
+use tokio_tls::TlsStream;
 // use std::io::{self, Read, Write};
 // use std::io::{Error, ErrorKind};
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 // use std::str::FromStr;
 use std::time::Duration;
 // use tokio::runtime::Runtime;
@@ -14,8 +15,8 @@ use url::{Host, Url};
 
 use futures::{future, Future};
 // use tokio::io::{AsyncRead, AsyncWrite, read_exact, write_all};
-use tokio::net::TcpStream;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
 // use tokio_timer::Timeout;
 
 // mod addr;
@@ -75,32 +76,35 @@ pub struct SocksStream {
 }
 
 impl SocksStream {
-    // pub fn connect(proxy: &'static str, target: &'static str) -> io::Result<SocksStream> {
+    pub async fn connect(
+        proxy: &'static str,
+        target: &'static str,
+    ) -> Result<SocksStream, Box<dyn std::error::Error>> {
+        Self::handshake(proxy, target.parse()?, SocksAuth::new()).await
+    }
 
-    //     Self::handshake(proxy, target.parse()?, SocksAuth::new())
-    // }
-
-    // pub async fn connect_plain(
-    //     proxy: &'static str,
-    //     target: &'static str,
-    //     username: &'static str,
-    //     password: &'static str,
-    // ) -> io::Result<SocksStream> {
-    //     await!(Self::handshake(
-    //         proxy,
-    //         target.parse()?,
-    //         SocksAuth::new_plain(username, password),
-    //     ))
-    // }
+    pub async fn connect_plain(
+        proxy: &'static str,
+        target: &'static str,
+        username: &'static str,
+        password: &'static str,
+    ) -> Result<SocksStream, Box<dyn std::error::Error>> {
+        Self::handshake(
+            proxy,
+            target.parse()?,
+            SocksAuth::new_plain(username, password),
+        )
+        .await
+    }
 
     // fn handshake(proxy: &'static str, target: Addr, auth: SocksAuth) -> io::Result<SocksStream> {
 
     async fn handshake(
-        proxy: &SocketAddr,
+        proxy: &'static str,
         target: Addr,
         auth: SocksAuth,
-    ) -> () {
-        let stream = TcpStream::connect(proxy).await?;
+    ) -> Result<SocksStream, Box<dyn std::error::Error>> {
+        let mut stream = TcpStream::connect(proxy).await?;
         // The initial greeting from the client
         //      field 1: SOCKS version, 1 byte (0x05 for this version)
         //      field 2: number of authentication methods supported, 1 byte
@@ -114,40 +118,40 @@ impl SocksStream {
         stream.read_exact(&mut buf).await?;
         match buf[0] {
             SOCKS_VERSION => Ok(()),
-            _ => Err("wrong server version"),  
+            _ => Err("wrong server version"),
         }?;
         stream.read_exact(&mut buf).await?;
-                match (buf[0] == auth.method as u8, buf[0]) {
-                    (true, 0u8) => Ok(()),
-                    (true, 2u8) => {
-                        // For username/password authentication the client's authentication request is
-                        //     field 1: version number, 1 byte (0x01 for current version of username/password authentication)
-                        let mut packet = vec![1u8];
-                        //     field 2: username length, 1 byte
-                        packet.push(auth.username.len() as u8);
-                        //     field 3: username, 1–255 bytes
-                        packet.append(&mut auth.username.clone());
-                        //     field 4: password length, 1 byte
-                        packet.push(auth.password.len() as u8);
-                        //     field 5: password, 1–255 bytes
-                        packet.append(&mut auth.password.clone());
-                        stream.write_all(&packet).await?;
-                        let mut buf = [0u8; 2];
-                        stream.read_exact(&mut buf).await?;
-                        // Server response for username/password authentication:
-                        //     field 1: version, 1 byte (0x01 for current version of username/password authentication)
-                        //     field 2: status code, 1 byte
-                        //         0x00: success
-                        //         any other value is a failure, connection must be closed
-                        match (buf[0] != 1u8, buf[1] != 0u8) {
-                                (true, _) => Err("wrong auth version"),
-                                (_, true) => Err("failure, connection must be closed"),
-                                _ => Ok(()),
-                            }?;
-                        Ok(())
-                    }
-                    _ => Err("auth method not supported"),
+        match (buf[0] == auth.method as u8, buf[0]) {
+            (true, 0u8) => Ok(()),
+            (true, 2u8) => {
+                // For username/password authentication the client's authentication request is
+                //     field 1: version number, 1 byte (0x01 for current version of username/password authentication)
+                let mut packet = vec![1u8];
+                //     field 2: username length, 1 byte
+                packet.push(auth.username.len() as u8);
+                //     field 3: username, 1–255 bytes
+                packet.append(&mut auth.username.clone());
+                //     field 4: password length, 1 byte
+                packet.push(auth.password.len() as u8);
+                //     field 5: password, 1–255 bytes
+                packet.append(&mut auth.password.clone());
+                stream.write_all(&packet).await?;
+                let mut buf = [0u8; 2];
+                stream.read_exact(&mut buf).await?;
+                // Server response for username/password authentication:
+                //     field 1: version, 1 byte (0x01 for current version of username/password authentication)
+                //     field 2: status code, 1 byte
+                //         0x00: success
+                //         any other value is a failure, connection must be closed
+                match (buf[0] != 1u8, buf[1] != 0u8) {
+                    (true, _) => Err("wrong auth version"),
+                    (_, true) => Err("failure, connection must be closed"),
+                    _ => Ok(()),
                 }?;
+                Ok(())
+            }
+            _ => Err("auth method not supported"),
+        }?;
         let mut packet = Vec::new();
         // The client's connection request is
         //     field 1: SOCKS version number, 1 byte (0x05 for this version)
@@ -174,9 +178,9 @@ impl SocksStream {
         //     field 1: SOCKS protocol version, 1 byte (0x05 for this version)
         stream.read_exact(&mut buf).await?;
         match buf[0] {
-                SOCKS_VERSION => Ok(()),
-                _ => Err("not supporter server version"),
-            }?;
+            SOCKS_VERSION => Ok(()),
+            _ => Err("not supporter server version"),
+        }?;
         //     field 2: status, 1 byte:
         //         0x00: request granted
         //         0x01: general failure
@@ -189,23 +193,23 @@ impl SocksStream {
         //         0x08: address type not supported
         stream.read_exact(&mut buf).await?;
         match buf[0] {
-                0 => Ok(()),
-                1 => Err("general failure"),
-                2 => Err("connection not allowed by ruleset"),
-                3 => Err("network unreachable"),
-                4 => Err("host unreachable"),
-                5 => Err("connection refused by destination host"),
-                6 => Err("TTL expired"),
-                7 => Err("command not supported / protocol error"),
-                8 => Err("address type not supported"),
-                _ => Err("unknown error"),
-            }?;
+            0 => Ok(()),
+            1 => Err("general failure"),
+            2 => Err("connection not allowed by ruleset"),
+            3 => Err("network unreachable"),
+            4 => Err("host unreachable"),
+            5 => Err("connection refused by destination host"),
+            6 => Err("TTL expired"),
+            7 => Err("command not supported / protocol error"),
+            8 => Err("address type not supported"),
+            _ => Err("unknown error"),
+        }?;
         //     field 3: reserved, must be 0x00, 1 byte
         stream.read_exact(&mut buf).await?;
         match buf[0] {
-                0u8 => Ok(()),
-                _ => Err("invalid reserved byte"),
-            }?;
+            0u8 => Ok(()),
+            _ => Err("invalid reserved byte"),
+        }?;
         //     field 4: address type, 1 byte:
         //         0x01: IPv4 address
         //         0x03: Domain name
@@ -220,28 +224,28 @@ impl SocksStream {
                 let mut buf = [0u8; 4];
                 stream.read_exact(&mut buf).await?;
                 Ok(Host::Ipv4(Ipv4Addr::from(buf)))
-            },
+            }
             3u8 => {
                 stream.read_exact(&mut buf).await?;
                 let mut buf = vec![0u8; buf[0] as usize];
                 stream.read_exact(&mut buf).await?;
-                    if let Ok(addr) = String::from_utf8(buf) {
-                        Ok(Host::Domain(addr))
-                    } else {
-                        Err("invalid address")
-                    }
-            },
+                if let Ok(addr) = String::from_utf8(buf) {
+                    Ok(Host::Domain(addr))
+                } else {
+                    Err("invalid address")
+                }
+            }
             4 => {
                 let mut buf = [0u8; 16];
                 stream.read_exact(&mut buf).await?;
                 Ok(Host::Ipv6(Ipv6Addr::from(buf)))
-            },
+            }
             _ => Err("invalid address type"),
         }?;
         //     field 6: server bound port number in a network byte order, 2 bytes
         let mut buf = [0u8; 2];
         stream.read_exact(&mut buf).await?;
-                let port = ((buf[0] as u16) << 8) | (buf[1] as u16);
+        let port = ((buf[0] as u16) << 8) | (buf[1] as u16);
         // let timeout = Timeout::new(full_address, Duration::new(10, 0))
         //     .map_err(|_| err_from("handshake timeout"));
         // timeout
@@ -258,13 +262,22 @@ impl SocksStream {
         //     Stream::Tcp(socket)
         // };
 
-        // Ok(SocksStream {
-        //     stream: Stream::Tcp(stream),
-        //     target: target.clone(),
-        //     bind_addr: host,
-        //     bind_port: port
-        // });
+        Ok(SocksStream {
+            stream: Stream::Tcp(stream),
+            target: target.clone(),
+            bind_addr: host,
+            bind_port: port,
+        })
+        // Ok(())
     }
+
+    //     pub async fn write_all(&mut self, body: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+    //         let mut s = self.stream.clone();
+    //         match s {
+    //             Stream::Tcp(stream) => Ok(stream.write_all(body).await?),
+    //             _ => Ok(()),
+    //         }
+    //     }
 }
 
 // pub async fn get(proxy: &'static str, target: &'static str) -> io::Result<Vec<u8>> {
