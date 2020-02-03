@@ -1,4 +1,4 @@
-// use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 use crate::addr::Addr;
 // use crate::utils::{err_from, f_box};
@@ -79,7 +79,7 @@ impl SocksStream {
     pub async fn connect(
         proxy: &'static str,
         target: &'static str,
-    ) -> Result<SocksStream, Box<dyn std::error::Error>> {
+    ) -> Result<SocksStream> {
         Self::handshake(proxy, target.parse()?, SocksAuth::new()).await
     }
 
@@ -88,7 +88,7 @@ impl SocksStream {
         target: &'static str,
         username: &'static str,
         password: &'static str,
-    ) -> Result<SocksStream, Box<dyn std::error::Error>> {
+    ) -> Result<SocksStream> {
         Self::handshake(
             proxy,
             target.parse()?,
@@ -103,7 +103,7 @@ impl SocksStream {
         proxy: &'static str,
         target: Addr,
         auth: SocksAuth,
-    ) -> Result<SocksStream, Box<dyn std::error::Error>> {
+    ) -> Result<SocksStream> {
         let mut stream = TcpStream::connect(proxy).await?;
         // The initial greeting from the client
         //      field 1: SOCKS version, 1 byte (0x05 for this version)
@@ -118,7 +118,7 @@ impl SocksStream {
         stream.read_exact(&mut buf).await?;
         match buf[0] {
             SOCKS_VERSION => Ok(()),
-            _ => Err("wrong server version"),
+            _ => Err(anyhow!("wrong server version")),
         }?;
         stream.read_exact(&mut buf).await?;
         match (buf[0] == auth.method as u8, buf[0]) {
@@ -144,13 +144,13 @@ impl SocksStream {
                 //         0x00: success
                 //         any other value is a failure, connection must be closed
                 match (buf[0] != 1u8, buf[1] != 0u8) {
-                    (true, _) => Err("wrong auth version"),
-                    (_, true) => Err("failure, connection must be closed"),
+                    (true, _) => Err(anyhow!("wrong auth version")),
+                    (_, true) => Err(anyhow!("failure, connection must be closed")),
                     _ => Ok(()),
                 }?;
                 Ok(())
             }
-            _ => Err("auth method not supported"),
+            _ => Err(anyhow!("auth method not supported")),
         }?;
         let mut packet = Vec::new();
         // The client's connection request is
@@ -179,7 +179,7 @@ impl SocksStream {
         stream.read_exact(&mut buf).await?;
         match buf[0] {
             SOCKS_VERSION => Ok(()),
-            _ => Err("not supporter server version"),
+            _ => Err(anyhow!("not supporter server version")),
         }?;
         //     field 2: status, 1 byte:
         //         0x00: request granted
@@ -194,21 +194,21 @@ impl SocksStream {
         stream.read_exact(&mut buf).await?;
         match buf[0] {
             0 => Ok(()),
-            1 => Err("general failure"),
-            2 => Err("connection not allowed by ruleset"),
-            3 => Err("network unreachable"),
-            4 => Err("host unreachable"),
-            5 => Err("connection refused by destination host"),
-            6 => Err("TTL expired"),
-            7 => Err("command not supported / protocol error"),
-            8 => Err("address type not supported"),
-            _ => Err("unknown error"),
+            1 => Err(anyhow!("general failure")),
+            2 => Err(anyhow!("connection not allowed by ruleset")),
+            3 => Err(anyhow!("network unreachable")),
+            4 => Err(anyhow!("host unreachable")),
+            5 => Err(anyhow!("connection refused by destination host")),
+            6 => Err(anyhow!("TTL expired")),
+            7 => Err(anyhow!("command not supported / protocol error")),
+            8 => Err(anyhow!("address type not supported")),
+            _ => Err(anyhow!("unknown error")),
         }?;
         //     field 3: reserved, must be 0x00, 1 byte
         stream.read_exact(&mut buf).await?;
         match buf[0] {
             0u8 => Ok(()),
-            _ => Err("invalid reserved byte"),
+            _ => Err(anyhow!("invalid reserved byte")),
         }?;
         //     field 4: address type, 1 byte:
         //         0x01: IPv4 address
@@ -232,7 +232,7 @@ impl SocksStream {
                 if let Ok(addr) = String::from_utf8(buf) {
                     Ok(Host::Domain(addr))
                 } else {
-                    Err("invalid address")
+                    Err(anyhow!("invalid address"))
                 }
             }
             4 => {
@@ -240,7 +240,7 @@ impl SocksStream {
                 stream.read_exact(&mut buf).await?;
                 Ok(Host::Ipv6(Ipv6Addr::from(buf)))
             }
-            _ => Err("invalid address type"),
+            _ => Err(anyhow!("invalid address type")),
         }?;
         //     field 6: server bound port number in a network byte order, 2 bytes
         let mut buf = [0u8; 2];

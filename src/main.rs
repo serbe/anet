@@ -20,7 +20,7 @@ mod socketstream;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Hello from Tokio!");
-    let socket = SocksStream::connect("socks5://127.0.0.1:9050", "https://ident.me").await?;
+    let socket = SocksStream::connect("127.0.0.1:9050", "https://ident.me").await?;
     //     let mut runtime = Runtime::new().unwrap();
     // //    let url = Url::from("ident.me/.json").unwrap();
     //     let url = Url::parse("https://httpbin.org/ip").unwrap();
