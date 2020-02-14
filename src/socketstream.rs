@@ -15,8 +15,9 @@ use url::{Host, Url};
 
 use futures::{future, Future};
 // use tokio::io::{AsyncRead, AsyncWrite, read_exact, write_all};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, AsyncWrite};
 use tokio::net::TcpStream;
+// use tokio::io::{AsyncWriteExt, AsyncReadExt};
 // use tokio_timer::Timeout;
 
 // mod addr;
@@ -67,6 +68,10 @@ pub enum Stream {
     Tls(Box<TlsStream<TcpStream>>),
 }
 
+// impl AsyncWrite for Stream {
+
+// }
+
 #[derive(Debug)]
 pub struct SocksStream {
     stream: Stream,
@@ -104,6 +109,8 @@ impl SocksStream {
         target: Addr,
         auth: SocksAuth,
     ) -> Result<SocksStream> {
+        println!("{:?}", target.to_vec());
+
         let mut stream = TcpStream::connect(proxy).await?;
         // The initial greeting from the client
         //      field 1: SOCKS version, 1 byte (0x05 for this version)
@@ -114,14 +121,13 @@ impl SocksStream {
         // The server's choice is communicated:
         //      field 1: SOCKS version, 1 byte (0x05 for this version)
         //      field 2: chosen authentication method, 1 byte, or 0xFF if no acceptable methods were offered
-        let mut buf = [0u8, 1];
-        stream.read_exact(&mut buf).await?;
+        let mut buf = Vec::with_capacity(2);
+        stream.read_buf(&mut buf).await?;
         match buf[0] {
             SOCKS_VERSION => Ok(()),
             _ => Err(anyhow!("wrong server version")),
         }?;
-        stream.read_exact(&mut buf).await?;
-        match (buf[0] == auth.method as u8, buf[0]) {
+        match (buf[1] == auth.method as u8, buf[1]) {
             (true, 0u8) => Ok(()),
             (true, 2u8) => {
                 // For username/password authentication the client's authentication request is
@@ -136,8 +142,8 @@ impl SocksStream {
                 //     field 5: password, 1–255 bytes
                 packet.append(&mut auth.password.clone());
                 stream.write_all(&packet).await?;
-                let mut buf = [0u8; 2];
-                stream.read_exact(&mut buf).await?;
+                let mut buf = Vec::with_capacity(2);
+                stream.read_buf(&mut buf).await?;
                 // Server response for username/password authentication:
                 //     field 1: version, 1 byte (0x01 for current version of username/password authentication)
                 //     field 2: status code, 1 byte
@@ -174,9 +180,10 @@ impl SocksStream {
         //     field 6: port number in a network byte order, 2 bytes
         packet.append(&mut target.to_vec().unwrap());
         stream.write_all(&packet).await?;
+        let mut buf = Vec::with_capacity(4);
+        stream.read_buf(&mut buf).await?;
         // Server response:
         //     field 1: SOCKS protocol version, 1 byte (0x05 for this version)
-        stream.read_exact(&mut buf).await?;
         match buf[0] {
             SOCKS_VERSION => Ok(()),
             _ => Err(anyhow!("not supporter server version")),
@@ -191,8 +198,7 @@ impl SocksStream {
         //         0x06: TTL expired
         //         0x07: command not supported / protocol error
         //         0x08: address type not supported
-        stream.read_exact(&mut buf).await?;
-        match buf[0] {
+        match buf[1] {
             0 => Ok(()),
             1 => Err(anyhow!("general failure")),
             2 => Err(anyhow!("connection not allowed by ruleset")),
@@ -205,8 +211,7 @@ impl SocksStream {
             _ => Err(anyhow!("unknown error")),
         }?;
         //     field 3: reserved, must be 0x00, 1 byte
-        stream.read_exact(&mut buf).await?;
-        match buf[0] {
+        match buf[2] {
             0u8 => Ok(()),
             _ => Err(anyhow!("invalid reserved byte")),
         }?;
@@ -214,21 +219,21 @@ impl SocksStream {
         //         0x01: IPv4 address
         //         0x03: Domain name
         //         0x04: IPv6 address
-        stream.read_exact(&mut buf).await?;
-        //     field 5: server bound address of
-        //         4 bytes for IPv4 address
-        //         1 byte of name length followed by 1–255 bytes the domain name
-        //         16 bytes for IPv6 address
-        let host = match buf[0] {
+        let host = match buf[3] {
+            //     field 5: server bound address of
+            //         4 bytes for IPv4 address
+            //         1 byte of name length followed by 1–255 bytes the domain name
+            //         16 bytes for IPv6 address
             1u8 => {
-                let mut buf = [0u8; 4];
-                stream.read_exact(&mut buf).await?;
-                Ok(Host::Ipv4(Ipv4Addr::from(buf)))
+                let mut buf = Vec::with_capacity(4);
+                stream.read_buf(&mut buf).await?;
+                Ok(Host::Ipv4(Ipv4Addr::new(buf[0],buf[1],buf[2],buf[3])))
             }
             3u8 => {
-                stream.read_exact(&mut buf).await?;
-                let mut buf = vec![0u8; buf[0] as usize];
-                stream.read_exact(&mut buf).await?;
+                let mut buf = Vec::with_capacity(1);
+                stream.read_buf(&mut buf).await?;
+                let mut buf = Vec::with_capacity(buf[0] as usize);
+                stream.read_buf(&mut buf).await?;
                 if let Ok(addr) = String::from_utf8(buf) {
                     Ok(Host::Domain(addr))
                 } else {
@@ -236,15 +241,15 @@ impl SocksStream {
                 }
             }
             4 => {
-                let mut buf = [0u8; 16];
-                stream.read_exact(&mut buf).await?;
-                Ok(Host::Ipv6(Ipv6Addr::from(buf)))
+                let mut buf = Vec::with_capacity(16);
+                stream.read_buf(&mut buf).await?;
+                Ok(Host::Ipv6(Ipv6Addr::from([buf[0],buf[1],buf[2],buf[3],buf[4],buf[5],buf[6],buf[7],buf[8],buf[9],buf[10],buf[11],buf[12],buf[13],buf[14],buf[15]])))
             }
             _ => Err(anyhow!("invalid address type")),
         }?;
         //     field 6: server bound port number in a network byte order, 2 bytes
-        let mut buf = [0u8; 2];
-        stream.read_exact(&mut buf).await?;
+        let mut buf = Vec::with_capacity(2);
+        stream.read_buf(&mut buf).await?;
         let port = ((buf[0] as u16) << 8) | (buf[1] as u16);
         // let timeout = Timeout::new(full_address, Duration::new(10, 0))
         //     .map_err(|_| err_from("handshake timeout"));
@@ -271,17 +276,25 @@ impl SocksStream {
         // Ok(())
     }
 
-    //     pub async fn write_all(&mut self, body: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
-    //         let mut s = self.stream.clone();
-    //         match s {
-    //             Stream::Tcp(stream) => Ok(stream.write_all(body).await?),
-    //             _ => Ok(()),
-    //         }
-    //     }
+        // pub async fn write_all(&mut self, body: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+        //     // let mut s = self.stream.clone();
+        //     match self.stream {
+        //         Stream::Tcp(stream) => {stream.write_all(body).await?; Ok(())},
+        //         _ => Ok(()),
+        //     }
+        // }
+
+        // pub async fn read_string(&mut self) -> Result<String, Box<dyn std::error::Error>> {
+        //     let mut buffer = String::new();
+        //     match self.stream {
+        //         Stream::Tcp(stream) => {stream.read_to_string(&mut buffer).await?;Ok(buffer)},
+        //         _ => Ok(String::new()),
+        //     }
+        // }
 }
 
-// pub async fn get(proxy: &'static str, target: &'static str) -> io::Result<Vec<u8>> {
-//     let mut stream = await!(SocksStream::connect(proxy, target))?;
+// pub async fn get(proxy: &'static str, target: &'static str) -> Result<Vec<u8>> {
+//     let mut stream = SocksStream::connect(proxy, target).await?;
 //     let request = format!(
 //         "GET {} HTTP/1.0\r\nHost: {}\r\n\r\n",
 //         stream.target.path(),
