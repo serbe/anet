@@ -16,4 +16,4 @@ tokio = { version = "0.2", features = ["full"] }
 # tokio-io = "0.2.0-alpha.6"
 # tokio-tcp = "0.2.0-alpha.6"
 # tokio-timer = "0.2"
-anyhow = "1.0"
+thiserror = "1.0"

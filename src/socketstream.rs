@@ -26,18 +26,6 @@ use tokio::net::TcpStream;
 //#[cfg(test)]
 //mod tests;
 
-const SOCKS_VERSION: u8 = 5u8;
-
-enum Command {
-    TcpStreamConnection = 1,
-}
-
-#[derive(Clone, Copy)]
-enum AuthMethod {
-    NoAuth = 0,
-    Plain = 2,
-}
-
 struct SocksAuth {
     method: AuthMethod,
     username: Vec<u8>,

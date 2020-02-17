@@ -7,12 +7,14 @@
 // use tokio_io::io::{flush, read_to_end, write_all};
 use tokio::io::{AsyncWriteExt, AsyncReadExt};
 
-use socketstream::SocksStream;
+// use socketstream::SocksStream;
 
 // mod client;
 mod addr;
-mod socketstream;
-// mod errors;
+// mod socketstream;
+mod socks5;
+mod consts;
+mod errors;
 // mod url;
 // mod utils;
 
@@ -20,8 +22,8 @@ mod socketstream;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("Hello from Tokio!");
-    let socket = SocksStream::connect("127.0.0.1:5959", "http://api.ipify.org").await?;
+    // println!("Hello from Tokio!");
+    // let socket = SocksStream::connect("127.0.0.1:5959", "http://api.ipify.org").await?;
     //     let mut runtime = Runtime::new().unwrap();
     // //    let url = Url::from("ident.me/.json").unwrap();
     //     let url = Url::parse("https://httpbin.org/ip").unwrap();
