@@ -12,12 +12,12 @@ use std::{
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::{BufMut, Bytes, BytesMut};
 use futures::{future, Future};
-use tokio::io::{AsyncReadExt, AsyncWriteExt, AsyncWrite};
+use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 //use log::error;
 
-use crate::errors::{Error, Result};
 use crate::consts::{self, AuthMethod};
+use crate::errors::{Error, Result};
 
 pub struct SocksAuth {
     method: AuthMethod,
@@ -60,21 +60,36 @@ impl SocksAuth {
 /// Server auth response
 ///
 /// ```plain
-/// +----+--------+
-/// |VER | METHOD |
-/// +----+--------+
-/// | 1  |   1    |
-/// +----+--------+
+/// The server selects from one of the methods given in METHODS, and
+/// sends a METHOD selection message:
 ///
-///    If the selected METHOD is X'FF', none of the methods listed by the
-///    client are acceptable, and the client MUST close the connection.
-///    The values currently defined for METHOD are:
-///           o  X'00' NO AUTHENTICATION REQUIRED
-///           o  X'01' GSSAPI
-///           o  X'02' USERNAME/PASSWORD
-///           o  X'03' to X'7F' IANA ASSIGNED
-///           o  X'80' to X'FE' RESERVED FOR PRIVATE METHODS
-///           o  X'FF' NO ACCEPTABLE METHODS
+///                       +----+--------+
+///                       |VER | METHOD |
+///                       +----+--------+
+///                       | 1  |   1    |
+///                       +----+--------+
+///
+/// If the selected METHOD is X'FF', none of the methods listed by the
+/// client are acceptable, and the client MUST close the connection.
+///
+/// The values currently defined for METHOD are:
+///
+///        o  X'00' NO AUTHENTICATION REQUIRED
+///        o  X'01' GSSAPI
+///        o  X'02' USERNAME/PASSWORD
+///        o  X'03' to X'7F' IANA ASSIGNED
+///        o  X'80' to X'FE' RESERVED FOR PRIVATE METHODS
+///        o  X'FF' NO ACCEPTABLE METHODS
+///
+/// The client and server then enter a method-specific sub-negotiation.
+/// Descriptions of the method-dependent sub-negotiations appear in
+/// separate memos.
+///
+/// Developers of new METHOD support for this protocol should contact
+/// IANA for a METHOD number.  The ASSIGNED NUMBERS document should be
+/// referred to for a current list of METHOD numbers and their
+/// corresponding protocols.
+/// ```
 pub struct AuthResponse {
     pub method: u8,
 }
@@ -98,16 +113,67 @@ pub async fn auth_response(mut stream: &mut TcpStream) -> Result<AuthResponse> {
         return Err(Error::NotSupportedSocksVersion(ver));
     }
     match AuthMethod::from(method) {
-        AuthMethod::NoAuth | AuthMethod::Plain => Ok(AuthResponse{method}),
+        AuthMethod::NoAuth | AuthMethod::Plain => Ok(AuthResponse { method }),
         AuthMethod::GSSAPI => Err(Error::Unimplement),
         AuthMethod::NoAccept => Err(Error::MethodNotAccept),
     }
 }
 
-pub async fn socks_auth(mut stream: &mut TcpStream, auth: SocksAuth) -> Result<()> {
+/// Auth with username and password
+///
+/// ```plain
+/// Once the SOCKS V5 server has started, and the client has selected the
+/// Username/Password Authentication protocol, the Username/Password
+/// subnegotiation begins.  This begins with the client producing a
+/// Username/Password request:
+///
+///         +----+------+----------+------+----------+
+///         |VER | ULEN |  UNAME   | PLEN |  PASSWD  |
+///         +----+------+----------+------+----------+
+///         | 1  |  1   | 1 to 255 |  1   | 1 to 255 |
+///         +----+------+----------+------+----------+
+///
+/// The VER field contains the current version of the subnegotiation,
+/// which is X'01'. The ULEN field contains the length of the UNAME field
+/// that follows. The UNAME field contains the username as known to the
+/// source operating system. The PLEN field contains the length of the
+/// PASSWD field that follows. The PASSWD field contains the password
+/// association with the given UNAME.
+/// ```
+pub async fn auth_plain(mut stream: &mut TcpStream, auth: SocksAuth) -> Result<()> {
+    let mut packet = vec![1u8];
+    packet.push(auth.username.len().into());
+    packet.append(&mut auth.username.clone());
+    packet.push(auth.password.len().into());
+    packet.append(&mut auth.password.clone());
+    stream.write_all(&packet).await?;
+    Ok(())
+}
+
+/// Check plain auth response
+/// 
+/// ```plain
+///    The server verifies the supplied UNAME and PASSWD, and sends the
+///    following response:
+///
+///                         +----+--------+
+///                         |VER | STATUS |
+///                         +----+--------+
+///                         | 1  |   1    |
+///                         +----+--------+
+///
+///    A STATUS field of X'00' indicates success. If the server returns a
+///    `failure' (STATUS value other than X'00') status, it MUST close the
+///    connection.
+/// ```
+pub async fn auth_plain_status(mut stream: &mut TcpStream) -> Result<()> {
+
+}
+
+pub async fn handshake(mut stream: &mut TcpStream, auth: SocksAuth) -> Result<()> {
     auth_request(&mut stream, auth.method).await?;
     let response = auth_response(&mut stream).await?;
-    if response.method !=  auth.method as u8 {
+    if response.method != auth.method as u8 {
         Err(Error::MethodWrong)
     } else {
         Ok(())
@@ -120,8 +186,10 @@ pub async fn connect(
     auth: SocksAuth,
 ) -> Result<TcpStream> {
     let mut stream = TcpStream::connect(proxy).await?;
-    socks_auth(&mut stream, auth).await?;
-    
+    handshake(&mut stream, auth).await?;
+    if auth.method == AuthMethod::Plain {
+        auth_plain(&mut stream, auth).await?;
+    }
 
     Ok(stream)
 }
