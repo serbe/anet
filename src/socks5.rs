@@ -127,16 +127,65 @@ impl SocksAuth {
 /// Client auth request
 ///
 /// ```plain
-/// +----+----------+----------+
-/// |VER | NMETHODS | METHODS  |
-/// +----+----------+----------+
-/// | 1  |    1     | 1 to 255 |
-/// +----+----------+----------+
+/// The client connects to the server, and sends a version
+/// identifier/method selection message:
+///
+///                 +----+----------+----------+
+///                 |VER | NMETHODS | METHODS  |
+///                 +----+----------+----------+
+///                 | 1  |    1     | 1 to 255 |
+///                 +----+----------+----------+
+///
+/// The VER field is set to X'05' for this version of the protocol.  The
+/// NMETHODS field contains the number of method identifier octets that
+/// appear in the METHODS field.
 /// ```
-// #[derive(Clone, Debug)]
-// pub struct AuthRequest {
-//     pub methods: Vec<u8>,
-// }
+/// #[derive(Clone, Debug)]
+struct AuthRequest {
+    pub ver: u8,
+    pub nmethods: u8,
+    pub methods: Vec<AuthMethod>,
+}
+
+impl AuthRequest {
+    fn default() -> Self {
+        AuthRequest{
+            ver: SOCKS5_VERSION,
+            nmethods: 0u8,
+            methods: Vec::new(),
+        }
+    }
+
+    fn add_method(&mut self, method: AuthMethod) {
+        if !self.methods.contains(&method) {
+            self.nmethods += 1;
+            self.methods.push(method);
+        }
+    }
+
+    fn new(method: AuthMethod) -> Self {
+        let mut auth_request = AuthRequest::default();
+        auth_request.add_method(method);
+        auth_request
+    }
+
+    fn to_vec(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.push(self.ver);
+        buf.push(self.nmethods);
+        for method in &self.methods {
+            buf.push(method.clone().into());
+        }
+        buf
+    }
+
+    // Send auth request to server
+    async fn send(&self, stream: &mut TcpStream) -> Result<()> {
+        let buf = self.to_vec();
+        stream.write_all(&buf).await?;
+        Ok(())
+    }
+}
 
 /// Server auth response
 ///
@@ -171,30 +220,27 @@ impl SocksAuth {
 /// referred to for a current list of METHOD numbers and their
 /// corresponding protocols.
 /// ```
-pub struct AuthResponse {
-    pub method: u8,
+struct AuthResponse {
+    ver: u8,
+    method: u8,
 }
 
-// Send auth request to server
-pub async fn auth_request(stream: &mut TcpStream, method: AuthMethod) -> Result<()> {
-    let buf = [SOCKS5_VERSION, 1u8, method.into()];
-    stream.write_all(&buf).await?;
-    Ok(())
-}
-
-// Read auth response from server
-pub async fn auth_response(stream: &mut TcpStream) -> Result<AuthResponse> {
-    let mut buf = [0u8, 0u8];
-    stream.read_exact(&mut buf).await?;
-    let ver = buf[0];
-    let method = buf[1];
-
-    if ver != SOCKS5_VERSION {
-        stream.shutdown().await?;
-        return Err(Error::NotSupportedSocksVersion(ver));
+impl AuthResponse {
+    async fn read(stream: &mut TcpStream) -> Result<AuthResponse> {
+        let mut buf = [0u8, 0u8];
+        stream.read_exact(&mut buf).await?;
+        let ver = buf[0];
+        let method = buf[1];
+        Ok(AuthResponse { ver, method })
     }
-    match AuthMethod::try_from(method)? {
-        AuthMethod::NoAuth | AuthMethod::Plain => Ok(AuthResponse { method }),
+
+    fn check(&self) -> Result<()> {
+
+    if self.ver != SOCKS5_VERSION {
+        return Err(Error::NotSupportedSocksVersion(self.ver));
+    }
+    match AuthMethod::try_from(self.method)? {
+        AuthMethod::NoAuth | AuthMethod::Plain => Ok(()),
         AuthMethod::GSSAPI => Err(Error::Unimplement),
         AuthMethod::NoAccept => Err(Error::MethodNotAccept),
     }
@@ -263,7 +309,7 @@ pub async fn check_auth_plain_status(stream: &mut TcpStream) -> Result<()> {
 }
 
 pub async fn handshake(mut stream: &mut TcpStream, auth: &SocksAuth) -> Result<()> {
-    auth_request(&mut stream, auth.method).await?;
+    AuthRequest::new(auth.method).send(&mut stream).await?;
     let response = auth_response(&mut stream).await?;
     if response.method != auth.method.into() {
         Err(Error::MethodWrong)
