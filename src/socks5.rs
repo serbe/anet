@@ -10,7 +10,7 @@ use std::{
 // use futures::{Future};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use url::Host;
+// use url::Host;
 
 use crate::addr::Addr;
 use crate::errors::{Error, Result};
@@ -222,7 +222,7 @@ impl AuthRequest {
 /// ```
 struct AuthResponse {
     ver: u8,
-    method: u8,
+    method: AuthMethod,
 }
 
 impl AuthResponse {
@@ -230,19 +230,16 @@ impl AuthResponse {
         let mut buf = [0u8, 0u8];
         stream.read_exact(&mut buf).await?;
         let ver = buf[0];
-        let method = buf[1];
-        Ok(AuthResponse { ver, method })
-    }
-
-    fn check(&self) -> Result<()> {
-
-    if self.ver != SOCKS5_VERSION {
-        return Err(Error::NotSupportedSocksVersion(self.ver));
-    }
-    match AuthMethod::try_from(self.method)? {
-        AuthMethod::NoAuth | AuthMethod::Plain => Ok(()),
-        AuthMethod::GSSAPI => Err(Error::Unimplement),
-        AuthMethod::NoAccept => Err(Error::MethodNotAccept),
+        let method = AuthMethod::try_from(buf[1])?;
+        if ver != SOCKS5_VERSION {
+            Err(Error::NotSupportedSocksVersion(ver))
+        } else {
+            match method {
+                AuthMethod::NoAuth | AuthMethod::Plain => Ok(AuthResponse{ver, method}),
+                AuthMethod::GSSAPI => Err(Error::Unimplement),
+                AuthMethod::NoAccept => Err(Error::MethodNotAccept),
+            }
+        }
     }
 }
 
@@ -310,15 +307,15 @@ pub async fn check_auth_plain_status(stream: &mut TcpStream) -> Result<()> {
 
 pub async fn handshake(mut stream: &mut TcpStream, auth: &SocksAuth) -> Result<()> {
     AuthRequest::new(auth.method).send(&mut stream).await?;
-    let response = auth_response(&mut stream).await?;
-    if response.method != auth.method.into() {
+    let auth_response = AuthResponse::read(&mut stream).await?;
+    if auth_response.method != auth.method {
         Err(Error::MethodWrong)
     } else {
         Ok(())
     }
 }
 
-pub async fn read_host(stream: &mut TcpStream) -> Result<Host> {
+pub async fn read_host(stream: &mut TcpStream) -> Result<Addr> {
     let mut buf = [0u8];
     stream.read_exact(&mut buf).await?;
     let addr_type = buf[0];
@@ -326,14 +323,14 @@ pub async fn read_host(stream: &mut TcpStream) -> Result<Host> {
         AddrType::IPv4 => {
             let mut buf = [0u8, 0u8, 0u8, 0u8];
             stream.read_exact(&mut buf).await?;
-            Ok(Host::Ipv4(Ipv4Addr::new(buf[0], buf[1], buf[2], buf[3])))
+            Ok(Addr::Ipv4(Ipv4Addr::new(buf[0], buf[1], buf[2], buf[3])))
         }
         AddrType::IPv6 => {
             let mut buf = [
                 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
             ];
             stream.read_exact(&mut buf).await?;
-            Ok(Host::Ipv6(Ipv6Addr::from(buf)))
+            Ok(Addr::Ipv6(Ipv6Addr::from(buf)))
             // Ok(Host::Ipv6(Ipv6Addr::from([
             //     buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7], buf[8], buf[9],
             //     buf[10], buf[11], buf[12], buf[13], buf[14], buf[15],
@@ -344,7 +341,7 @@ pub async fn read_host(stream: &mut TcpStream) -> Result<Host> {
             stream.read_exact(&mut buf).await?;
             let mut buf = Vec::with_capacity(buf[0] as usize);
             stream.read_buf(&mut buf).await?;
-            Ok(Host::Domain(String::from_utf8(buf)?))
+            Ok(Addr::Domain(String::from_utf8(buf)?))
         }
     }
 }
@@ -385,15 +382,30 @@ pub async fn read_port(stream: &mut TcpStream) -> Result<u16> {
 /// and destination addresses, and return one or more reply messages, as
 /// appropriate for the request type.
 /// ```
-pub async fn request(stream: &mut TcpStream, target: &Addr) -> Result<()> {
-    let mut buf = Vec::new();
-    buf.push(SOCKS5_VERSION);
-    buf.push(Command::TCPConnection.into());
-    buf.push(0u8);
-    buf.append(&mut target.to_vec().unwrap());
-    stream.write_all(&buf).await?;
-    Ok(())
+struct SocksRequest {
+    ver: u8,
+    cmd: Command,
+    rsv: u8,
+    atyp: u8,
+    dst_addr: Addr,
+    dst_port: u16,
 }
+
+// impl SocksRequest {
+//     fn new(command: Command, target: &str) -> Result<Self> {
+
+//     }
+// }
+
+// pub async fn request(stream: &mut TcpStream, target: &Addr) -> Result<()> {
+//     let mut buf = Vec::new();
+//     buf.push(SOCKS5_VERSION);
+//     buf.push(Command::TCPConnection.into());
+//     buf.push(0u8);
+//     // buf.append(&mut target.to_vec().unwrap());
+//     stream.write_all(&buf).await?;
+//     Ok(())
+// }
 
 /// Read replies
 ///
@@ -476,10 +488,10 @@ pub async fn start_connect(
     if auth.method == AuthMethod::Plain {
         auth_plain(&mut stream, auth).await?;
     }
-    request(&mut stream, &target).await?;
-    replies(&mut stream).await?;
-    let _host = read_host(&mut stream).await?;
-    let _port = read_port(&mut stream).await?;
+    // request(&mut stream, &target).await?;
+    // replies(&mut stream).await?;
+    // let _host = read_host(&mut stream).await?;
+    // let _port = read_port(&mut stream).await?;
     Ok(stream)
 }
 

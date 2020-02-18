@@ -10,13 +10,14 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 // use socketstream::SocksStream;
 
 // mod client;
+mod authority;
 mod addr;
 // mod socketstream;
 mod socks5;
 // mod consts;
 mod errors;
-// mod url;
-// mod utils;
+mod uri;
+mod range;
 
 // use tokio::prelude::*;
 

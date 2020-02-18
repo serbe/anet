@@ -1,4 +1,4 @@
-use std::{io, result, string};
+use std::{io, net, result, string};
 
 use thiserror::Error;
 
@@ -12,6 +12,8 @@ pub enum Error {
     IO(#[from] io::Error),
     #[error("string from utf8 error")]
     Utf8Error(#[from] string::FromUtf8Error),
+    #[error("Net address parse")]
+    StdParseAddr(#[from] net::AddrParseError),
     #[error("Unimplement feature")]
     Unimplement,
     #[error("Auth method not accepted")]
@@ -44,6 +46,10 @@ pub enum Error {
     AddressTypeNotSupported(u8),
     #[error("Unknown command: {0}")]
     CommandUnknown(u8),
+    #[error("Parse ip version 6")]
+    ParseIPv6,
+    #[error("Parse address")]
+    ParseAddr,
  }
 
 // #[fail(display = "{}", _0)]
