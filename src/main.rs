@@ -5,7 +5,7 @@
 // use socks::Address;
 // use tokio::runtime::Runtime;
 // use tokio_io::io::{flush, read_to_end, write_all};
-use tokio::io::{AsyncWriteExt, AsyncReadExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 // use socketstream::SocksStream;
 
@@ -13,7 +13,7 @@ use tokio::io::{AsyncWriteExt, AsyncReadExt};
 mod addr;
 // mod socketstream;
 mod socks5;
-mod consts;
+// mod consts;
 mod errors;
 // mod url;
 // mod utils;
@@ -23,7 +23,7 @@ mod errors;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // println!("Hello from Tokio!");
-    // let socket = SocksStream::connect("127.0.0.1:5959", "http://api.ipify.org").await?;
+    let mut stream = socks5::connect("127.0.0.1:5959", "http://api.ipify.org").await?;
     //     let mut runtime = Runtime::new().unwrap();
     // //    let url = Url::from("ident.me/.json").unwrap();
     //     let url = Url::parse("https://httpbin.org/ip").unwrap();
@@ -36,14 +36,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //     let client =
     //         client::Socks5Client::connect(Address::DomainNameAddress("ident.me".to_owned(), 80), *proxy_sa.first().unwrap());
 
-    // let get = "GET / HTTP/1.0\r\nHost: ident.me\r\n\r\n"
-    //     .to_string()
-    //     .into_bytes();
+    let get = "GET / HTTP/1.0\r\nHost: api.ipify.org\r\n\r\n"
+        .to_string()
+        .into_bytes();
 
-    // socket.write_all(&get).await?;
-    // let buffer = socket.read_string().await?;
+    stream.write_all(&get).await?;
+    let mut buffer = String::new();
+    stream.read_to_string(&mut buffer).await?;
 
-    // println!("{}", buffer);
+    println!("{}", buffer);
 
     //     let request = client.and_then(|c| {
     //         write_all(c, get)
