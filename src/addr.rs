@@ -10,6 +10,22 @@ pub enum Addr {
     Domain(String),
 }
 
+impl Addr {
+    pub fn to_vec(&self) -> Vec<u8> {
+        match self {
+            Addr::Ipv4(ipv4) => ipv4.octets().to_vec(),
+            Addr::Ipv6(ipv6) => ipv6.octets().to_vec(),
+            Addr::Domain(domain) => {
+                let mut vec = Vec::new();
+                let mut addr = domain.as_bytes().to_vec();
+                vec.push(addr.len() as u8);
+                vec.append(&mut addr);
+                vec
+            }
+        }
+    }
+}
+
 impl FromStr for Addr {
     type Err = Error;
 
