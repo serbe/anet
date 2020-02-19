@@ -149,31 +149,27 @@ impl Uri {
         self.scheme() == "https"
     }
 
-    pub fn to_vec(&self) -> Vec<u8> {
-        let mut vec = Vec::new();
-        vec.push(self.addr_type());
-        match self.addr {
-            Addr::Ipv4(_) => vec.append(&mut self.host_vec()),
-            Addr::Ipv6(_) => vec.append(&mut self.host_vec()),
-            Addr::Domain(_) => {
-                let mut addr = self.host_vec();
-                vec.push(addr.len() as u8);
-                vec.append(&mut addr);
-            }
-        }
-        vec.append(&mut self.addr_port());
-        vec
-    }
+    // pub fn to_vec(&self) -> Vec<u8> {
+    //     let mut vec = Vec::new();
+    //     vec.push(self.addr_type());
+    //     match self.addr {
+    //         Addr::Ipv4(_) => vec.append(&mut self.host_vec()),
+    //         Addr::Ipv6(_) => vec.append(&mut self.host_vec()),
+    //         Addr::Domain(_) => {
+    //             let mut addr = self.host_vec();
+    //             vec.push(addr.len() as u8);
+    //             vec.append(&mut addr);
+    //         }
+    //     }
+    //     vec.append(&mut self.addr_port());
+    //     vec
+    // }
 
-    pub fn host_vec(&self) -> Vec<u8> {
-        match &self.addr {
-            Addr::Ipv4(ipv4) => ipv4.octets().to_vec(),
-            Addr::Ipv6(ipv6) => ipv6.octets().to_vec(),
-            Addr::Domain(domain) => domain.as_bytes().to_vec(),
-        }
-    }
+    // pub fn host_vec(&self) -> Vec<u8> {
+    //     self.addr.to_vec()
+    // }
 
-    fn addr_type(&self) -> u8 {
+    pub fn addr_type(&self) -> u8 {
         match self.addr {
             Addr::Ipv4(_) => 1u8,
             Addr::Ipv6(_) => 4u8,
