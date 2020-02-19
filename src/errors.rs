@@ -50,7 +50,17 @@ pub enum Error {
     ParseIPv6,
     #[error("Parse address")]
     ParseAddr,
- }
+    #[error("Parse host")]
+    ParseHost,
+    #[error("Parse port: {0}")]
+    ParsePort(String),
+    #[error("Unsupported scheme: {0}")]
+    UnsupportedScheme(String),
+    #[error("Empty scheme")]
+    EmptyScheme,
+    #[error("Empty authority")]
+    EmptyAuthority,
+}
 
 // #[fail(display = "{}", _0)]
 // Io(#[cause] std::io::Error),
@@ -92,7 +102,6 @@ pub enum Error {
 // ReplyAddressTypeNotSupported(&'static str),
 // #[fail(display = "Other reply: {} {}", _0, _1)]
 // ReplyOtherReply(&'static str, u8)
-
 
 // impl From<std::io::Error> for Error {
 //     fn from(err: std::io::Error) -> Error {

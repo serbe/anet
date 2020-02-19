@@ -83,7 +83,7 @@ impl FromStr for Authority {
 
         if let Some(p) = port {
             if inner[p].parse::<u16>().is_err() {
-                return Err(Error::ParsePort);
+                return Err(Error::ParsePort(inner[p].to_string()));
             }
         }
 

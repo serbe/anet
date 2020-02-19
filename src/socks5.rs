@@ -149,7 +149,7 @@ struct AuthRequest {
 
 impl AuthRequest {
     fn default() -> Self {
-        AuthRequest{
+        AuthRequest {
             ver: SOCKS5_VERSION,
             nmethods: 0u8,
             methods: Vec::new(),
@@ -235,7 +235,7 @@ impl AuthResponse {
             Err(Error::NotSupportedSocksVersion(ver))
         } else {
             match method {
-                AuthMethod::NoAuth | AuthMethod::Plain => Ok(AuthResponse{ver, method}),
+                AuthMethod::NoAuth | AuthMethod::Plain => Ok(AuthResponse { ver, method }),
                 AuthMethod::GSSAPI => Err(Error::Unimplement),
                 AuthMethod::NoAccept => Err(Error::MethodNotAccept),
             }
