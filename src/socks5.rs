@@ -10,13 +10,13 @@ use tokio::net::TcpStream;
 
 use crate::addr::Addr;
 use crate::errors::{Error, Result};
-use crate::uri::Uri;
 use crate::stream::MaybeHttpsStream;
+use crate::uri::Uri;
 
 pub const SOCKS5_VERSION: u8 = 0x05;
 
 pub struct Sock5Stream {
-    stream: MaybeHttpsStream
+    stream: MaybeHttpsStream,
 }
 
 impl Sock5Stream {
@@ -393,8 +393,7 @@ struct SocksRequest {
 }
 
 impl SocksRequest {
-    fn new(command: Command, target: &str) -> Result<SocksRequest> {
-        let uri = target.parse::<Uri>()?;
+    fn new(command: Command, uri: &Uri) -> Result<SocksRequest> {
         let atyp = AddrType::try_from(uri.addr_type())?;
         let dst_addr = uri.addr();
         let dst_port = uri.default_port();
@@ -548,12 +547,22 @@ pub async fn connect(proxy: &str, target: &str) -> Result<Sock5Stream> {
     AuthResponse::read(&mut stream)
         .await?
         .check(AuthMethod::NoAuth)?;
-    SocksRequest::new(Command::TCPConnection, target)?
+    let uri = target.parse::<Uri>()?;
+    SocksRequest::new(Command::TCPConnection, &uri)?
         .send(&mut stream)
         .await?;
     SocksResponse::read(&mut stream).await?;
-    let maybe_stream = MaybeHttpsStream::from(stream);
-    Ok(Sock5Stream { stream: maybe_stream })
+    let maybe_stream = if uri.is_ssl() {
+        let connector = native_tls::TlsConnector::builder().build()?;
+        let connector = tokio_tls::TlsConnector::from(connector);
+        let tls_stream = connector.connect(&uri.host(), stream).await?;
+        MaybeHttpsStream::from(tls_stream)
+    } else {
+        MaybeHttpsStream::from(stream)
+    };
+    Ok(Sock5Stream {
+        stream: maybe_stream,
+    })
 }
 
 pub async fn connect_plain(
@@ -573,10 +582,20 @@ pub async fn connect_plain(
         .send(&mut stream)
         .await?;
     UserPassResponse::read(&mut stream).await?;
-    SocksRequest::new(Command::TCPConnection, target)?
+    let uri = target.parse::<Uri>()?;
+    SocksRequest::new(Command::TCPConnection, &uri)?
         .send(&mut stream)
         .await?;
     SocksResponse::read(&mut stream).await?;
-    let maybe_stream = MaybeHttpsStream::from(stream);
-    Ok(Sock5Stream { stream: maybe_stream })
+    let maybe_stream = if uri.is_ssl() {
+        let connector = native_tls::TlsConnector::builder().build()?;
+        let connector = tokio_tls::TlsConnector::from(connector);
+        let tls_stream = connector.connect(&uri.host(), stream).await?;
+        MaybeHttpsStream::from(tls_stream)
+    } else {
+        MaybeHttpsStream::from(stream)
+    };
+    Ok(Sock5Stream {
+        stream: maybe_stream,
+    })
 }

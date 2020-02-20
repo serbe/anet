@@ -4,9 +4,8 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use bytes::{Buf, BufMut};
-// use futures::Poll;
-use tokio::net::TcpStream;
 use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::net::TcpStream;
 use tokio_tls::TlsStream;
 
 pub enum MaybeHttpsStream {
@@ -15,11 +14,6 @@ pub enum MaybeHttpsStream {
     /// A stream protected with TLS.
     Https(TlsStream<TcpStream>),
 }
-
-// /// A stream protected with TLS.
-// pub struct TlsStream<T> {
-//     inner: native_tls::TlsStream<T>,
-// }
 
 impl fmt::Debug for MaybeHttpsStream {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

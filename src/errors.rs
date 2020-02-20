@@ -38,8 +38,8 @@ pub enum Error {
     // CommandOrProtocolError,
     // #[error("Address type not supported")]
     // WrongAddressType,
-    // #[error("Unknown error")]
-    // UnknownError,
+    #[error("NstivrTls")]
+    NativeTls(#[from] native_tls::Error),
     #[error("Wrong reserved byte: {0}")]
     WrongReserved(u8),
     #[error("Address type: {0} not supported")]
