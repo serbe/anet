@@ -11,8 +11,22 @@ use tokio::net::TcpStream;
 use crate::addr::Addr;
 use crate::errors::{Error, Result};
 use crate::uri::Uri;
+use crate::stream::MaybeHttpsStream;
 
 pub const SOCKS5_VERSION: u8 = 0x05;
+
+pub struct Sock5Stream {
+    stream: MaybeHttpsStream
+}
+
+impl Sock5Stream {
+    pub async fn get(&mut self, buf: Vec<u8>) -> Result<String> {
+        self.stream.write_all(&buf).await?;
+        let mut buffer = String::new();
+        self.stream.read_to_string(&mut buffer).await?;
+        Ok(buffer)
+    }
+}
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Command {
@@ -526,7 +540,7 @@ impl SocksResponse {
     }
 }
 
-pub async fn connect(proxy: &str, target: &str) -> Result<TcpStream> {
+pub async fn connect(proxy: &str, target: &str) -> Result<Sock5Stream> {
     let mut stream = TcpStream::connect(proxy).await?;
     AuthRequest::new(AuthMethod::NoAuth)
         .send(&mut stream)
@@ -538,7 +552,8 @@ pub async fn connect(proxy: &str, target: &str) -> Result<TcpStream> {
         .send(&mut stream)
         .await?;
     SocksResponse::read(&mut stream).await?;
-    Ok(stream)
+    let maybe_stream = MaybeHttpsStream::from(stream);
+    Ok(Sock5Stream { stream: maybe_stream })
 }
 
 pub async fn connect_plain(
@@ -546,7 +561,7 @@ pub async fn connect_plain(
     target: &str,
     username: &str,
     password: &str,
-) -> Result<TcpStream> {
+) -> Result<Sock5Stream> {
     let mut stream = TcpStream::connect(proxy).await?;
     AuthRequest::new(AuthMethod::Plain)
         .send(&mut stream)
@@ -562,5 +577,6 @@ pub async fn connect_plain(
         .send(&mut stream)
         .await?;
     SocksResponse::read(&mut stream).await?;
-    Ok(stream)
+    let maybe_stream = MaybeHttpsStream::from(stream);
+    Ok(Sock5Stream { stream: maybe_stream })
 }
