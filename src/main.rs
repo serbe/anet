@@ -6,6 +6,7 @@
 // use tokio::runtime::Runtime;
 // use tokio_io::io::{flush, read_to_end, write_all};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use bytes::Bytes;
 
 // use socketstream::SocksStream;
 
@@ -37,9 +38,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //         client::Socks5Client::connect(Address::DomainNameAddress("ident.me".to_owned(), 80), *proxy_sa.first().unwrap());
 
     let mut stream = socks5::connect("127.0.0.1:5959", "https://api.ipify.org").await?;
-    let get = "GET / HTTP/1.0\r\nHost: api.ipify.org\r\n\r\n"
-        .to_string()
-        .into_bytes();
+    let get = Bytes::from("GET / HTTP/1.0\r\nHost: api.ipify.org\r\n\r\n");
+        // .to_string()
+        // .into_bytes();
     let buffer = stream.get(get).await?;
     // stream.read_to_string(&mut buffer).await?;
     println!("{}", buffer);

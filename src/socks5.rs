@@ -5,6 +5,7 @@ use std::{
     u8,
 };
 
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
@@ -20,7 +21,7 @@ pub struct Sock5Stream {
 }
 
 impl Sock5Stream {
-    pub async fn get(&mut self, buf: Vec<u8>) -> Result<String> {
+    pub async fn get(&mut self, buf: Bytes) -> Result<String> {
         self.stream.write_all(&buf).await?;
         let mut buffer = String::new();
         self.stream.read_to_string(&mut buffer).await?;
@@ -166,19 +167,19 @@ impl AuthRequest {
         auth_request
     }
 
-    fn to_vec(&self) -> Vec<u8> {
-        let mut buf = Vec::new();
-        buf.push(self.ver);
-        buf.push(self.nmethods);
+    fn bytes(&self) -> Bytes {
+        let mut buf = BytesMut::new();
+        buf.put_u8(self.ver);
+        buf.put_u8(self.nmethods);
         for method in &self.methods {
-            buf.push(method.clone().into());
+            buf.put_u8(method.clone().into());
         }
-        buf
+        buf.freeze()
     }
 
     // Send auth request to server
     async fn send(&self, stream: &mut TcpStream) -> Result<()> {
-        let buf = self.to_vec();
+        let buf = self.bytes();
         println!("AuthRequest {:?}", buf);
         stream.write_all(&buf).await?;
         Ok(())
@@ -225,7 +226,7 @@ struct AuthResponse {
 
 impl AuthResponse {
     async fn read(stream: &mut TcpStream) -> Result<Self> {
-        let mut buf = [0u8; 2];
+        let mut buf = BytesMut::with_capacity(2);
         stream.read_exact(&mut buf).await?;
         println!("AuthResponse {:?}", buf);
         let ver = buf[0];
